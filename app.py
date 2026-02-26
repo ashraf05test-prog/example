@@ -10,8 +10,7 @@ import shutil
 import re
 from bs4 import BeautifulSoup
 
-import os
-app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 tasks = {}
@@ -25,8 +24,7 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
         'error': error
     }
 
-                m3u8' in script.string:
-                def extract_links(url):
+def extract_links(url):
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
@@ -39,13 +37,10 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
         m3u8_url = None
         subtitle_url = None
 
-        # Method 1: regex search in page source
-        import re
         m3u8_patterns = [
             r'https?://[^\s"\'\\]+\.m3u8[^\s"\'\\]*',
-            r'file["\s]*:["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
-            r'source["\s]*:["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
-            r'src["\s]*=["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
+            r'file["\s]*:["\s]*["\']?(https?://[^"\'\\]+\.m3u8[^"\'\\]*)',
+            r'source["\s]*:["\s]*["\']?(https?://[^"\'\\]+\.m3u8[^"\'\\]*)',
         ]
         for pattern in m3u8_patterns:
             matches = re.findall(pattern, text)
@@ -53,18 +48,17 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
                 m3u8_url = matches[0] if isinstance(matches[0], str) else matches[0][-1]
                 break
 
-        # Method 2: find iframe and fetch that too
         if not m3u8_url:
             soup = BeautifulSoup(text, 'html.parser')
-            iframes = soup.find_all('iframe')
-            for iframe in iframes:
+            for iframe in soup.find_all('iframe'):
                 src = iframe.get('src', '')
                 if src and ('embed' in src or 'player' in src or 'watch' in src):
                     try:
+                        if not src.startswith('http'):
+                            src = 'https:' + src if src.startswith('//') else url.rstrip('/') + '/' + src.lstrip('/')
                         iframe_resp = requests.get(src, headers=headers, timeout=15)
-                        iframe_text = iframe_resp.text
                         for pattern in m3u8_patterns:
-                            matches = re.findall(pattern, iframe_text)
+                            matches = re.findall(pattern, iframe_resp.text)
                             if matches:
                                 m3u8_url = matches[0] if isinstance(matches[0], str) else matches[0][-1]
                                 break
@@ -73,35 +67,34 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
                 if m3u8_url:
                     break
 
-        # Subtitle search
         sub_patterns = [
             r'https?://[^\s"\'\\]+\.(vtt|srt)[^\s"\'\\]*',
-            r'track["\s]*:["\s]*(["\'])(https?://[^"\']+\.(vtt|srt)[^"\']*)\1',
-            r'subtitle["\s]*:["\s]*(["\'])(https?://[^"\']+\.(vtt|srt)[^"\']*)\1',
+            r'subtitle["\s]*:["\s]*["\']?(https?://[^"\'\\]+\.(vtt|srt)[^"\'\\]*)',
         ]
         for pattern in sub_patterns:
             matches = re.findall(pattern, text)
             if matches:
                 m = matches[0]
-                subtitle_url = m if isinstance(m, str) else m[-1] if isinstance(m[-1], str) and m[-1] in ('vtt','srt') else m[0] if isinstance(m[0], str) and ('http' in m[0]) else None
-                if subtitle_url and subtitle_url in ('vtt', 'srt'):
-                    subtitle_url = None
-                    continue
-                break
+                if isinstance(m, str) and m.startswith('http'):
+                    subtitle_url = m
+                elif isinstance(m, tuple):
+                    for part in m:
+                        if part.startswith('http'):
+                            subtitle_url = part
+                            break
+                if subtitle_url:
+                    break
 
-        # Track tags
-        soup = BeautifulSoup(text, 'html.parser')
-        for track in soup.find_all('track'):
+        soup2 = BeautifulSoup(text, 'html.parser')
+        for track in soup2.find_all('track'):
             src = track.get('src', '')
             if src and ('.vtt' in src or '.srt' in src):
-                subtitle_url = src if src.startswith('http') else url.rstrip('/') + '/' + src.lstrip('/')
+                subtitle_url = src if src.startswith('http') else 'https:' + src if src.startswith('//') else url.rstrip('/') + '/' + src.lstrip('/')
                 break
 
-        return {'m3u8': m3u8_url, 'subtitle': subtitle_url, 'found': bool(m3u8_url or subtitle_url)}
+        return {'m3u8': m3u8_url, 'subtitle': subtitle_url}
     except Exception as e:
         return {'error': str(e), 'm3u8': None, 'subtitle': None}
-    except Exception as e:
-        return {'error': str(e)}
 
 def download_video(m3u8_url, output_path, task_id):
     update_task(task_id, 'downloading', '⏳ ভিডিও ডাউনলোড হচ্ছে...', 10)
