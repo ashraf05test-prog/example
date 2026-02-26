@@ -16,3 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 CMD gunicorn --timeout 3600 --workers 1 --bind 0.0.0.0:$PORT app:app
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install playwright && \
+    playwright install chromium --with-deps || true
