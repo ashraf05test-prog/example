@@ -1,0 +1,9 @@
+flask
+pyrogram
+tgcrypto
+ffmpeg-python
+deep-translator
+google-generativeai
+requests
+beautifulsoup4
+gunicorn
