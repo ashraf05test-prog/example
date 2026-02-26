@@ -10,7 +10,8 @@ import shutil
 import re
 from bs4 import BeautifulSoup
 
-app = Flask(__name__)
+import os
+app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'))
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 tasks = {}
