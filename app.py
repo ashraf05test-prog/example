@@ -24,14 +24,80 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
         'link': link,
         'error': error
     }
-
 def extract_links(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=15)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://google.com',
+        }
+        response = requests.get(url, headers=headers, timeout=20)
+        text = response.text
         m3u8_url = None
         subtitle_url = None
+
+        # Method 1: regex search in page source
+        import re
+        m3u8_patterns = [
+            r'https?://[^\s"\'\\]+\.m3u8[^\s"\'\\]*',
+            r'file["\s]*:["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
+            r'source["\s]*:["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
+            r'src["\s]*=["\s]*(["\'])(https?://[^"\']+\.m3u8[^"\']*)\1',
+        ]
+        for pattern in m3u8_patterns:
+            matches = re.findall(pattern, text)
+            if matches:
+                m3u8_url = matches[0] if isinstance(matches[0], str) else matches[0][-1]
+                break
+
+        # Method 2: find iframe and fetch that too
+        if not m3u8_url:
+            soup = BeautifulSoup(text, 'html.parser')
+            iframes = soup.find_all('iframe')
+            for iframe in iframes:
+                src = iframe.get('src', '')
+                if src and ('embed' in src or 'player' in src or 'watch' in src):
+                    try:
+                        iframe_resp = requests.get(src, headers=headers, timeout=15)
+                        iframe_text = iframe_resp.text
+                        for pattern in m3u8_patterns:
+                            matches = re.findall(pattern, iframe_text)
+                            if matches:
+                                m3u8_url = matches[0] if isinstance(matches[0], str) else matches[0][-1]
+                                break
+                    except:
+                        pass
+                if m3u8_url:
+                    break
+
+        # Subtitle search
+        sub_patterns = [
+            r'https?://[^\s"\'\\]+\.(vtt|srt)[^\s"\'\\]*',
+            r'track["\s]*:["\s]*(["\'])(https?://[^"\']+\.(vtt|srt)[^"\']*)\1',
+            r'subtitle["\s]*:["\s]*(["\'])(https?://[^"\']+\.(vtt|srt)[^"\']*)\1',
+        ]
+        for pattern in sub_patterns:
+            matches = re.findall(pattern, text)
+            if matches:
+                m = matches[0]
+                subtitle_url = m if isinstance(m, str) else m[-1] if isinstance(m[-1], str) and m[-1] in ('vtt','srt') else m[0] if isinstance(m[0], str) and ('http' in m[0]) else None
+                if subtitle_url and subtitle_url in ('vtt', 'srt'):
+                    subtitle_url = None
+                    continue
+                break
+
+        # Track tags
+        soup = BeautifulSoup(text, 'html.parser')
+        for track in soup.find_all('track'):
+            src = track.get('src', '')
+            if src and ('.vtt' in src or '.srt' in src):
+                subtitle_url = src if src.startswith('http') else url.rstrip('/') + '/' + src.lstrip('/')
+                break
+
+        return {'m3u8': m3u8_url, 'subtitle': subtitle_url, 'found': bool(m3u8_url or subtitle_url)}
+    except Exception as e:
+        return {'error': str(e), 'm3u8': None, 'subtitle': None}
         for script in soup.find_all('script'):
             if script.string:
                 if '.m3u8' in script.string:
