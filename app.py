@@ -24,7 +24,9 @@ def update_task(task_id, status, message, progress=0, link=None, error=None):
         'link': link,
         'error': error
     }
-def extract_links(url):
+
+                m3u8' in script.string:
+                def extract_links(url):
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
@@ -98,21 +100,6 @@ def extract_links(url):
         return {'m3u8': m3u8_url, 'subtitle': subtitle_url, 'found': bool(m3u8_url or subtitle_url)}
     except Exception as e:
         return {'error': str(e), 'm3u8': None, 'subtitle': None}
-        for script in soup.find_all('script'):
-            if script.string:
-                if '.m3u8' in script.string:
-                    matches = re.findall(r'https?://[^\s"\']+\.m3u8[^\s"\']*', script.string)
-                    if matches:
-                        m3u8_url = matches[0]
-                if '.vtt' in script.string or '.srt' in script.string:
-                    matches = re.findall(r'https?://[^\s"\']+\.(vtt|srt)[^\s"\']*', script.string)
-                    if matches:
-                        subtitle_url = matches[0] if isinstance(matches[0], str) else matches[0][0]
-        for track in soup.find_all('track'):
-            src = track.get('src', '')
-            if src and ('.vtt' in src or '.srt' in src):
-                subtitle_url = src
-        return {'m3u8': m3u8_url, 'subtitle': subtitle_url}
     except Exception as e:
         return {'error': str(e)}
 
